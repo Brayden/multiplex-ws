@@ -35,10 +35,19 @@
         const statusElement = document.getElementById('connectionStatus');
 
         // Replace with your deployed Worker URL below:
-        const wsUrl = 'wss://ws-multiplexing.[INSERT-YOUR-IDENTIFER].workers.dev/ws';
+        const wsUrl = 'wss://ws-multiplexing.[YOUR-IDENTIFIER].workers.dev/ws';
+        
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        function generateRandomId() {
+            return Math.random().toString(36).substring(2, 15);
+        }
         
         function connect() {
-            const sessionId = '123'; // You would probably want to generate this dynamically
+            const sessionId = getUrlParameter('id') || generateRandomId();
             ws = new WebSocket(`${wsUrl}?id=${encodeURIComponent(sessionId)}`);
 
             ws.onopen = () => {

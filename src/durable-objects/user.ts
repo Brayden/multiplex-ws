@@ -141,15 +141,32 @@ export class UserDurableObject extends DurableObject<Env> {
         }
     }
 
-    async createChannelSocketConnection(channel: string) {
+    async createChannelSocketConnection(channel: string, shardVersion: number = 0) {
         // Create a stub to another Durable Object based on the `channel` value
         // the user wants to subscribe to. In this example any number of users may
         // subscribe to any channel they want, think of it like a public chatroom.
         // Durable Objects can support over 32,000 web socket connections at a time
         // but the more limiting factor is usually the memory resources running the
         // DO's and not the web socket count.
-        const stubId = this.env.CHANNEL_DURABLE_OBJECT.idFromName(channel);
+        const stubId = this.env.CHANNEL_DURABLE_OBJECT.idFromName(`${channel}_${shardVersion}`);
         const stub = this.env.CHANNEL_DURABLE_OBJECT.get(stubId);
+
+        // First do an RPC check to see if the shard is overloaded and if so we will
+        // check the next shard continuously until one is available.
+        const allowed: { success: boolean, limitReached?: boolean } = await stub.canSupportConnection();
+
+        if (!allowed.success && !allowed.limitReached) {
+            // Check to see if the next shard version can accept connections.
+            await this.createChannelSocketConnection(channel, shardVersion + 1)
+            return
+        } else if (allowed.limitReached) {
+            throw new Error("Maximum connections to this channel and all shards.");
+        }
+
+        // Now that we know we have an available shard to us, let's instantiate it in
+        // case it hasn't been already so it knows what shard number it is as well as
+        // any metadata it needs to know about (e.g. which channel it represents).
+        await stub.init(shardVersion, { channel: channel })
 
         // To create a websocket connection between two Durable Objects we can
         // pass a request to a stubs `fetch` function which will interpret it
